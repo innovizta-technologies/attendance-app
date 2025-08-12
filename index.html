@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Live Attendance Capture</title>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+    video, canvas, img { max-width: 100%; margin-top: 10px; border: 1px solid #ccc; border-radius: 8px; }
+    button { padding: 10px 20px; margin: 10px; font-size: 16px; }
+    input { padding: 8px; font-size: 16px; width: 90%; max-width: 300px; }
+  </style>
+</head>
+<body>
+
+  <h2>Live Attendance Capture</h2>
+  <input type="text" id="name" placeholder="Enter your name" required><br>
+  <video id="video" autoplay playsinline></video><br>
+  <button id="captureBtn">Capture Photo & Submit</button>
+  <div id="status" style="margin-top: 15px; font-size:14px; color:green;"></div>
+
+  <script>
+    const video = document.getElementById('video');
+    const captureBtn = document.getElementById('captureBtn');
+    const statusDiv = document.getElementById('status');
+
+    const backendURL = "https://script.google.com/macros/s/AKfycby4mnWswRzTOvPh5ZfhCVTTGb40I5kv4BeHW_8Jy74mDw-4dNyn1nlKOZYW5dC0YC_aIw/exec";
+
+    // Start live camera
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+      .then(stream => { video.srcObject = stream; })
+      .catch(err => alert("Camera access denied: " + err));
+
+    captureBtn.addEventListener('click', () => {
+      const name = document.getElementById('name').value.trim();
+      if (!name) {
+        return alert("Please enter your name before submitting.");
+      }
+
+      statusDiv.textContent = "Capturing location...";
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude, accuracy } = pos.coords;
+
+        statusDiv.textContent = "Capturing photo...";
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const imageData = canvas.toDataURL("image/jpeg");
+
+        statusDiv.textContent = "Submitting attendance...";
+        fetch(backendURL, {
+          method: 'POST',
+          body: JSON.stringify({ name, latitude, longitude, accuracy, image: imageData }),
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "success") {
+            statusDiv.style.color = "green";
+            statusDiv.textContent = "✅ Attendance recorded successfully!";
+          } else {
+            statusDiv.style.color = "red";
+            statusDiv.textContent = "❌ Error: " + (data.message || JSON.stringify(data));
+          }
+        })
+        .catch(err => {
+          statusDiv.style.color = "red";
+          statusDiv.textContent = "❌ Submission failed: " + err;
+        });
+
+      }, err => {
+        alert("Location error: " + err.message);
+        statusDiv.textContent = "";
+      }, { enableHighAccuracy: true, timeout: 10000 });
+    });
+  </script>
+
+</body>
+</html>
